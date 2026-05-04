@@ -710,22 +710,31 @@ export default function Dashboard() {
         });
         if (disposed) return;
 
-        // Target the horizontal center at floor level for top-down view
-        const target = result.center.clone();
-        target.y = 0;
-        ctx.camera.target = target;
-        ctx.camera.alpha = Tools.ToRadians(270);
-        ctx.camera.beta = Tools.ToRadians(0.5);
         ctx.camera.lowerRadiusLimit = result.diagonal * 0.27;
         ctx.camera.upperRadiusLimit = result.diagonal * 5;
 
         modelSizeRef.current = { x: result.size.x, z: result.size.z };
         modelDiagonalRef.current = result.diagonal;
-        ctx.camera.radius = computeIdealRadius();
+
+        const savedPose = getSetting('controls').homeView;
+        if (savedPose) {
+          ctx.camera.target = new Vector3(savedPose.target.x, savedPose.target.y, savedPose.target.z);
+          ctx.camera.alpha = savedPose.alpha;
+          ctx.camera.beta = savedPose.beta;
+          ctx.camera.radius = savedPose.radius;
+        } else {
+          // Default: center at floor level, top-down view
+          const target = result.center.clone();
+          target.y = 0;
+          ctx.camera.target = target;
+          ctx.camera.alpha = Tools.ToRadians(270);
+          ctx.camera.beta = Tools.ToRadians(0.5);
+          ctx.camera.radius = computeIdealRadius();
+        }
 
         createModelShadow(ctx.scene, result.center, result.size);
 
-        setDefaultTarget({ x: target.x, y: 0, z: target.z });
+        setDefaultTarget({ x: result.center.x, y: 0, z: result.center.z });
 
         modelMeshesRef.current = result.meshes.filter(
           (m) => m.getTotalVertices?.() > 0,
