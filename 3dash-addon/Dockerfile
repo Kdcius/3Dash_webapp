@@ -8,6 +8,7 @@ RUN apk add --no-cache git
 WORKDIR /app
 RUN git clone --depth 1 https://github.com/kdcius/3Dash_webapp.git .
 RUN npm ci
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build -- --mode addon
 
 # Stage 2: Serve with nginx on HA base image
