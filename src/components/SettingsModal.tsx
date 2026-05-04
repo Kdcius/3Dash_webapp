@@ -61,6 +61,10 @@ interface Props {
   pointShadowRes: number;
   onPointShadowResChange: (res: number) => void;
 
+  /* Textures */
+  showTextures: boolean;
+  onShowTexturesChange: (enabled: boolean) => void;
+
   /* Debug */
   onDebugToggle: () => void;
 
@@ -115,6 +119,8 @@ export default function SettingsModal({
   onSunShadowResChange,
   pointShadowRes,
   onPointShadowResChange,
+  showTextures,
+  onShowTexturesChange,
   onDebugToggle,
   onEditGrid,
   onChangeHomeView,
@@ -613,6 +619,24 @@ export default function SettingsModal({
             {/* Render */}
             {(section === 'render' || (animating && prevSection === 'render')) && (
               <div className="settings-page">
+                <div className="settings-section">
+                  <div className="settings-section-label">Textures</div>
+                  <div className="settings-mode-toggle">
+                    <button
+                      className={`settings-mode-btn${showTextures ? ' active' : ''}`}
+                      onClick={() => onShowTexturesChange(true)}
+                    >
+                      On
+                    </button>
+                    <button
+                      className={`settings-mode-btn${!showTextures ? ' active' : ''}`}
+                      onClick={() => onShowTexturesChange(false)}
+                    >
+                      Off
+                    </button>
+                  </div>
+                </div>
+
                 <div className="settings-section">
                   <div className="settings-section-label">Edge Mode</div>
                   <div className="settings-mode-toggle">

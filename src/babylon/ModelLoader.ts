@@ -22,10 +22,16 @@ export interface ModelLoadResult {
   size: Vector3;
 }
 
+export interface LoadModelOptions {
+  /** When true, keep original textured materials and skip the white cartoon edges. */
+  showTextures?: boolean;
+}
+
 export async function loadModel(
   scene: Scene,
   source: string | Blob,
   onProgress?: (percent: number) => void,
+  options?: LoadModelOptions,
 ): Promise<ModelLoadResult> {
   let dir: string;
   let file: string;
@@ -108,8 +114,8 @@ export async function loadModel(
     .filter((l) => l.name !== 'sun' && l.name !== 'hemi')
     .forEach((l) => l.setEnabled(false));
 
-  // Apply white cartoon style: pure white material + black edge wireframe
-  applyCartoonStyle(scene, solidMeshes);
+  // Apply white cartoon style or keep original textures depending on user setting.
+  applyRenderStyle(scene, solidMeshes, options?.showTextures ?? false);
 
   const shadowCasters: AbstractMesh[] = [...solidMeshes];
 
@@ -117,27 +123,71 @@ export async function loadModel(
   return { meshes: result.meshes, shadowCasters, center, diagonal, size };
 }
 
-/**
- * Apply a white cartoon style: pure white diffuse material on all meshes
- * with black edge wireframe overlay for an architectural sketch look.
- */
-function applyCartoonStyle(scene: Scene, meshes: AbstractMesh[]): void {
+const CARTOON_MAT_NAME = 'cartoon_white';
+
+function getOrCreateCartoonMaterial(scene: Scene): StandardMaterial {
+  const existing = scene.getMaterialByName(CARTOON_MAT_NAME);
+  if (existing) return existing as StandardMaterial;
   // Shared white StandardMaterial (more robust than PBR for CAD exports lacking normals/UVs)
-  const whiteMat = new StandardMaterial('cartoon_white', scene);
+  const whiteMat = new StandardMaterial(CARTOON_MAT_NAME, scene);
   whiteMat.diffuseColor = new Color3(1, 1, 1);
   whiteMat.specularColor = new Color3(0.1, 0.1, 0.1);
   whiteMat.backFaceCulling = false;
   whiteMat.twoSidedLighting = true;
   whiteMat.maxSimultaneousLights = 48;
+  return whiteMat;
+}
+
+/**
+ * Apply either the white cartoon (sketch) style or the original textured materials.
+ * Stores each mesh's original material once so the modes can be toggled at runtime.
+ */
+function applyRenderStyle(scene: Scene, meshes: AbstractMesh[], showTextures: boolean): void {
+  const whiteMat = getOrCreateCartoonMaterial(scene);
 
   for (const mesh of meshes) {
-    mesh.material = whiteMat;
+    if (!mesh.metadata) mesh.metadata = {};
+    if (mesh.metadata.originalMaterial === undefined) {
+      mesh.metadata.originalMaterial = mesh.material;
+    }
     mesh.applyFog = false; // fog is only for the ground grid fade
 
-    // Per-mesh edges for outer corners (inner corners handled by EdgeOutline post-process)
-    mesh.enableEdgesRendering();
-    mesh.edgesWidth = 3;
-    mesh.edgesColor = new Color4(0, 0, 0, 1);
+    if (showTextures) {
+      const orig = mesh.metadata.originalMaterial;
+      if (orig) mesh.material = orig;
+      mesh.disableEdgesRendering();
+    } else {
+      mesh.material = whiteMat;
+      // Per-mesh edges for outer corners (inner corners handled by EdgeOutline post-process)
+      mesh.enableEdgesRendering();
+      mesh.edgesWidth = 3;
+      mesh.edgesColor = new Color4(0, 0, 0, 1);
+    }
+  }
+}
+
+/**
+ * Toggle the textured / sketch render style on already-loaded meshes.
+ * Restores original materials when enabled, or re-applies the cartoon white + black edges when disabled.
+ */
+export function setTexturesEnabled(
+  scene: Scene,
+  meshes: AbstractMesh[],
+  enabled: boolean,
+  edgeWidth: number,
+): void {
+  const whiteMat = getOrCreateCartoonMaterial(scene);
+  for (const mesh of meshes) {
+    if (enabled) {
+      const orig = mesh.metadata?.originalMaterial;
+      if (orig) mesh.material = orig;
+      mesh.disableEdgesRendering();
+    } else {
+      mesh.material = whiteMat;
+      mesh.enableEdgesRendering();
+      mesh.edgesWidth = edgeWidth;
+      mesh.edgesColor = new Color4(0, 0, 0, 1);
+    }
   }
 }
 

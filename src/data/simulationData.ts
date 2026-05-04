@@ -329,6 +329,7 @@ export const SIMULATION_SETTINGS: AppSettings = {
     perspective: true,
     sunShadowRes: 512,
     pointShadowRes: 512,
+    showTextures: false,
   },
   environment: {
     sunLiveMode: true,

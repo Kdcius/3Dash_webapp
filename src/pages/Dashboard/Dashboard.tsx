@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Animation, Camera, Color3, Color4, CubicEase, EasingFunction, ShadowGenerator, Tools, Vector3, type AbstractMesh, type Mesh, type Observer, type Scene } from '@babylonjs/core';
 import { createScene, setupSunShadows, type SceneContext } from '../../babylon/SceneManager';
-import { loadModel, createShadowWalls } from '../../babylon/ModelLoader';
+import { loadModel, createShadowWalls, setTexturesEnabled } from '../../babylon/ModelLoader';
 import { createEdgeOutline, type EdgeOutlineControls } from '../../babylon/EdgeOutline';
 import {
   createLightMesh,
@@ -151,6 +151,7 @@ export default function Dashboard() {
   const [perspective, setPerspective] = useState(() => getSetting('render').perspective);
   const [sunShadowRes, setSunShadowRes] = useState(() => getSetting('render').sunShadowRes);
   const [pointShadowRes, setPointShadowRes] = useState(() => getSetting('render').pointShadowRes);
+  const [showTextures, setShowTextures] = useState(() => getSetting('render').showTextures);
 
   // Sync 3D background with theme (respects custom bgColor)
   const syncSceneBg = useCallback(() => {
@@ -382,8 +383,8 @@ export default function Dashboard() {
   const handleEdgeModeChange = useCallback((mode: 'classic' | 'enhanced') => {
     setEdgeMode(mode);
     updateSettings('render', { edgeMode: mode });
-    edgeOutlineRef.current?.setEnabled(mode === 'enhanced');
-  }, []);
+    edgeOutlineRef.current?.setEnabled(mode === 'enhanced' && !showTextures);
+  }, [showTextures]);
 
   const handleEdgeWidthChange = useCallback((width: number) => {
     setEdgeWidth(width);
@@ -392,6 +393,15 @@ export default function Dashboard() {
       mesh.edgesWidth = width;
     }
   }, []);
+
+  const handleShowTexturesChange = useCallback((enabled: boolean) => {
+    setShowTextures(enabled);
+    updateSettings('render', { showTextures: enabled });
+    const scene = sceneCtxRef.current?.scene;
+    if (!scene) return;
+    setTexturesEnabled(scene, modelMeshesRef.current, enabled, edgeWidth);
+    edgeOutlineRef.current?.setEnabled(!enabled && edgeMode === 'enhanced');
+  }, [edgeWidth, edgeMode]);
 
   // Count lights that are on
   const updateLightsOnCount = useCallback(() => {
@@ -673,7 +683,10 @@ export default function Dashboard() {
         return;
       }
       try {
-        const result = await loadModel(ctx.scene, modelBlob);
+        const showTexturesAtLoad = getSetting('render').showTextures;
+        const result = await loadModel(ctx.scene, modelBlob, undefined, {
+          showTextures: showTexturesAtLoad,
+        });
         if (disposed) return;
 
         // Target the horizontal center at floor level for top-down view
@@ -708,8 +721,8 @@ export default function Dashboard() {
           meshes: modelMeshesRef.current,
         });
 
-        // Disable post-process if edge mode is classic
-        if (getSetting('render').edgeMode === 'classic') {
+        // Disable post-process if edge mode is classic or textures are shown
+        if (getSetting('render').edgeMode === 'classic' || showTexturesAtLoad) {
           edgeOutlineRef.current.setEnabled(false);
         }
 
@@ -1629,6 +1642,8 @@ export default function Dashboard() {
           onSunShadowResChange={handleSunShadowResChange}
           pointShadowRes={pointShadowRes}
           onPointShadowResChange={handlePointShadowResChange}
+          showTextures={showTextures}
+          onShowTexturesChange={handleShowTexturesChange}
           onDebugToggle={() => setDebugOpen((v) => !v)}
           onEditGrid={() => setGridEditMode(true)}
           onChangeHomeView={() => setHomeViewSetting(true)}
