@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Animation, Camera, Color3, Color4, CubicEase, EasingFunction, ShadowGenerator, Tools, Vector3, type AbstractMesh, type Mesh, type Observer, type Scene } from '@babylonjs/core';
 import { createScene, setupSunShadows, type SceneContext } from '../../babylon/SceneManager';
-import { loadModel, createShadowWalls, setTexturesEnabled } from '../../babylon/ModelLoader';
+import { loadModel, createShadowWalls, setTexturesEnabled, setSketchAppearance } from '../../babylon/ModelLoader';
 import { createEdgeOutline, type EdgeOutlineControls } from '../../babylon/EdgeOutline';
 import {
   createLightMesh,
@@ -152,6 +152,8 @@ export default function Dashboard() {
   const [sunShadowRes, setSunShadowRes] = useState(() => getSetting('render').sunShadowRes);
   const [pointShadowRes, setPointShadowRes] = useState(() => getSetting('render').pointShadowRes);
   const [showTextures, setShowTextures] = useState(() => getSetting('render').showTextures);
+  const [sketchColor, setSketchColor] = useState(() => getSetting('render').sketchColor);
+  const [sketchSpecular, setSketchSpecular] = useState(() => getSetting('render').sketchSpecular);
 
   // Sync 3D background with theme (respects custom bgColor)
   const syncSceneBg = useCallback(() => {
@@ -402,6 +404,22 @@ export default function Dashboard() {
     setTexturesEnabled(scene, modelMeshesRef.current, enabled, edgeWidth);
     edgeOutlineRef.current?.setEnabled(!enabled && edgeMode === 'enhanced');
   }, [edgeWidth, edgeMode]);
+
+  const handleSketchColorChange = useCallback((color: string) => {
+    setSketchColor(color);
+    updateSettings('render', { sketchColor: color });
+    const scene = sceneCtxRef.current?.scene;
+    if (!scene) return;
+    setSketchAppearance(scene, color, getSetting('render').sketchSpecular);
+  }, []);
+
+  const handleSketchSpecularChange = useCallback((value: number) => {
+    setSketchSpecular(value);
+    updateSettings('render', { sketchSpecular: value });
+    const scene = sceneCtxRef.current?.scene;
+    if (!scene) return;
+    setSketchAppearance(scene, getSetting('render').sketchColor, value);
+  }, []);
 
   // Count lights that are on
   const updateLightsOnCount = useCallback(() => {
@@ -683,9 +701,12 @@ export default function Dashboard() {
         return;
       }
       try {
-        const showTexturesAtLoad = getSetting('render').showTextures;
+        const renderAtLoad = getSetting('render');
+        const showTexturesAtLoad = renderAtLoad.showTextures;
         const result = await loadModel(ctx.scene, modelBlob, undefined, {
           showTextures: showTexturesAtLoad,
+          sketchColor: renderAtLoad.sketchColor,
+          sketchSpecular: renderAtLoad.sketchSpecular,
         });
         if (disposed) return;
 
@@ -1644,6 +1665,10 @@ export default function Dashboard() {
           onPointShadowResChange={handlePointShadowResChange}
           showTextures={showTextures}
           onShowTexturesChange={handleShowTexturesChange}
+          sketchColor={sketchColor}
+          onSketchColorChange={handleSketchColorChange}
+          sketchSpecular={sketchSpecular}
+          onSketchSpecularChange={handleSketchSpecularChange}
           onDebugToggle={() => setDebugOpen((v) => !v)}
           onEditGrid={() => setGridEditMode(true)}
           onChangeHomeView={() => setHomeViewSetting(true)}

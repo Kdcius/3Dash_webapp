@@ -25,6 +25,18 @@ export interface ModelLoadResult {
 export interface LoadModelOptions {
   /** When true, keep original textured materials and skip the white cartoon edges. */
   showTextures?: boolean;
+  /** Base color of the cartoon material when textures are off (hex string, e.g. "#ffffff"). */
+  sketchColor?: string;
+  /** Specular intensity (0..1) of the cartoon material; applied as uniform grayscale. */
+  sketchSpecular?: number;
+}
+
+function hexToColor3(hex: string): Color3 {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3
+    ? h.split('').map(c => c + c).join('')
+    : h, 16);
+  return new Color3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }
 
 export async function loadModel(
@@ -115,7 +127,11 @@ export async function loadModel(
     .forEach((l) => l.setEnabled(false));
 
   // Apply white cartoon style or keep original textures depending on user setting.
-  applyRenderStyle(scene, solidMeshes, options?.showTextures ?? false);
+  applyRenderStyle(scene, solidMeshes, {
+    showTextures: options?.showTextures ?? false,
+    sketchColor: options?.sketchColor ?? '#ffffff',
+    sketchSpecular: options?.sketchSpecular ?? 0.1,
+  });
 
   const shadowCasters: AbstractMesh[] = [...solidMeshes];
 
@@ -128,22 +144,40 @@ const CARTOON_MAT_NAME = 'cartoon_white';
 function getOrCreateCartoonMaterial(scene: Scene): StandardMaterial {
   const existing = scene.getMaterialByName(CARTOON_MAT_NAME);
   if (existing) return existing as StandardMaterial;
-  // Shared white StandardMaterial (more robust than PBR for CAD exports lacking normals/UVs)
-  const whiteMat = new StandardMaterial(CARTOON_MAT_NAME, scene);
-  whiteMat.diffuseColor = new Color3(1, 1, 1);
-  whiteMat.specularColor = new Color3(0.1, 0.1, 0.1);
-  whiteMat.backFaceCulling = false;
-  whiteMat.twoSidedLighting = true;
-  whiteMat.maxSimultaneousLights = 48;
-  return whiteMat;
+  // Shared StandardMaterial (more robust than PBR for CAD exports lacking normals/UVs)
+  const mat = new StandardMaterial(CARTOON_MAT_NAME, scene);
+  mat.diffuseColor = new Color3(1, 1, 1);
+  mat.specularColor = new Color3(0.1, 0.1, 0.1);
+  mat.backFaceCulling = false;
+  mat.twoSidedLighting = true;
+  mat.maxSimultaneousLights = 48;
+  return mat;
 }
 
 /**
- * Apply either the white cartoon (sketch) style or the original textured materials.
+ * Update the cartoon material's diffuse and specular at runtime.
+ * `sketchSpecular` is applied as a uniform grayscale on all three channels.
+ */
+export function setSketchAppearance(scene: Scene, sketchColor: string, sketchSpecular: number): void {
+  const mat = getOrCreateCartoonMaterial(scene);
+  mat.diffuseColor = hexToColor3(sketchColor);
+  const s = Math.max(0, Math.min(1, sketchSpecular));
+  mat.specularColor = new Color3(s, s, s);
+}
+
+interface RenderStyleOptions {
+  showTextures: boolean;
+  sketchColor: string;
+  sketchSpecular: number;
+}
+
+/**
+ * Apply either the cartoon (sketch) style or the original textured materials.
  * Stores each mesh's original material once so the modes can be toggled at runtime.
  */
-function applyRenderStyle(scene: Scene, meshes: AbstractMesh[], showTextures: boolean): void {
-  const whiteMat = getOrCreateCartoonMaterial(scene);
+function applyRenderStyle(scene: Scene, meshes: AbstractMesh[], opts: RenderStyleOptions): void {
+  setSketchAppearance(scene, opts.sketchColor, opts.sketchSpecular);
+  const cartoonMat = getOrCreateCartoonMaterial(scene);
 
   for (const mesh of meshes) {
     if (!mesh.metadata) mesh.metadata = {};
@@ -152,12 +186,12 @@ function applyRenderStyle(scene: Scene, meshes: AbstractMesh[], showTextures: bo
     }
     mesh.applyFog = false; // fog is only for the ground grid fade
 
-    if (showTextures) {
+    if (opts.showTextures) {
       const orig = mesh.metadata.originalMaterial;
       if (orig) mesh.material = orig;
       mesh.disableEdgesRendering();
     } else {
-      mesh.material = whiteMat;
+      mesh.material = cartoonMat;
       // Per-mesh edges for outer corners (inner corners handled by EdgeOutline post-process)
       mesh.enableEdgesRendering();
       mesh.edgesWidth = 3;

@@ -65,6 +65,12 @@ interface Props {
   showTextures: boolean;
   onShowTexturesChange: (enabled: boolean) => void;
 
+  /* Sketch material */
+  sketchColor: string;
+  onSketchColorChange: (color: string) => void;
+  sketchSpecular: number;
+  onSketchSpecularChange: (value: number) => void;
+
   /* Debug */
   onDebugToggle: () => void;
 
@@ -121,6 +127,10 @@ export default function SettingsModal({
   onPointShadowResChange,
   showTextures,
   onShowTexturesChange,
+  sketchColor,
+  onSketchColorChange,
+  sketchSpecular,
+  onSketchSpecularChange,
   onDebugToggle,
   onEditGrid,
   onChangeHomeView,
@@ -636,6 +646,35 @@ export default function SettingsModal({
                     </button>
                   </div>
                 </div>
+
+                {!showTextures && (
+                  <>
+                    <div className="settings-section">
+                      <div className="settings-section-label">Sketch Color</div>
+                      <input
+                        type="color"
+                        className="settings-color-input"
+                        value={sketchColor}
+                        onChange={(e) => onSketchColorChange(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="settings-section">
+                      <div className="settings-section-label">Sheen</div>
+                      <div className="settings-scrubber">
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={sketchSpecular}
+                          onChange={(e) => onSketchSpecularChange(parseFloat(e.target.value))}
+                        />
+                        <span className="settings-scrubber-time">{sketchSpecular.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="settings-section">
                   <div className="settings-section-label">Edge Mode</div>

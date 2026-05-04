@@ -528,6 +528,36 @@
   transform: scale(1.15);
 }
 
+.settings-color-input {
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.settings-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.settings-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.settings-color-input::-moz-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+[data-theme="light"] .settings-color-input {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .settings-swatch:hover:not(.active) {
     border-color: var(--muted);

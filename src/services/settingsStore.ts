@@ -34,6 +34,8 @@ export interface RenderSettings {
   sunShadowRes: number;
   pointShadowRes: number;
   showTextures: boolean;
+  sketchColor: string;
+  sketchSpecular: number;
 }
 
 export interface EnvironmentSettings {
@@ -104,6 +106,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     sunShadowRes: 512,
     pointShadowRes: 512,
     showTextures: false,
+    sketchColor: '#ffffff',
+    sketchSpecular: 0.1,
   },
   environment: {
     sunLiveMode: true,
