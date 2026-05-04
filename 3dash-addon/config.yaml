@@ -1,5 +1,5 @@
 name: "3Dash"
-version: "1.2.2"
+version: "1.2.3"
 slug: "3dash"
 description: "3D Dashboard for Home Assistant"
 url: "https://github.com/kdcius/3Dash_webapp"
