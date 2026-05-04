@@ -3,6 +3,7 @@ import type { TubeConfig, TubeLineConfig, TubeInputUnit, TubeOriginDirection, Li
 import { generateUUID } from '../utils/uuid';
 import LucideIcon from './SidePanel/cards/LucideIcon';
 import { FormPanel, AccordionSection } from './FormPanel';
+import EntityPicker, { type HAEntityOption } from './EntityPicker';
 
 export interface TubePreviewInfo {
   config: TubeConfig;
@@ -16,6 +17,7 @@ interface Props {
   onSave: (cfg: TubeConfig) => void;
   onClose: () => void;
   onPreviewChange: (info: TubePreviewInfo) => void;
+  haEntities?: HAEntityOption[];
 }
 
 const DIRECTION_OPTIONS: { value: TubeOriginDirection; label: string }[] = [
@@ -55,6 +57,7 @@ export default function TubeForm({
   onSave,
   onClose,
   onPreviewChange,
+  haEntities = [],
 }: Props) {
   const [label, setLabel] = useState('');
   const [originDirection, setOriginDirection] = useState<TubeOriginDirection>('left');
@@ -303,13 +306,16 @@ export default function TubeForm({
               onChange={(e) => handleLineChange(i, 'color', e.target.value)}
               title="Line color"
             />
-            <input
-              type="text"
-              className="field-input tube-line-sensor"
-              placeholder="sensor.entity_id"
-              value={line.sensorId}
-              onChange={(e) => handleLineChange(i, 'sensorId', e.target.value)}
-            />
+            <div className="tube-line-sensor" style={{ flex: 1 }}>
+              <EntityPicker
+                value={line.sensorId}
+                onChange={(v) => handleLineChange(i, 'sensorId', v)}
+                onSelect={(ent) => { if (i === 0 && !label.trim() && ent.friendly_name) setLabel(ent.friendly_name); }}
+                placeholder="sensor.entity_id"
+                entities={haEntities}
+                className="field-input"
+              />
+            </div>
             {lines.length > 1 && (
               <button
                 className="tube-line-remove"

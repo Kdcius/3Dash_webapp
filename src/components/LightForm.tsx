@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { LightConfig, LightType, LightPosition, LightPart, HitboxConfig } from '../types';
 import { FormPanel, AccordionSection } from './FormPanel';
+import EntityPicker, { type HAEntityOption } from './EntityPicker';
 
 interface PartState {
   shape: 'sphere' | 'cube';
@@ -74,6 +75,7 @@ interface Props {
   onExitPlacingMode: () => void;
   onPreviewChange: (info: PreviewInfo) => void;
   placingMode: boolean;
+  haEntities?: HAEntityOption[];
 }
 
 const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
@@ -87,6 +89,7 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
   onExitPlacingMode,
   onPreviewChange,
   placingMode,
+  haEntities = [],
 }, ref) {
   const [entityId, setEntityId] = useState('');
   const [label, setLabel] = useState('');
@@ -306,12 +309,13 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
       <AccordionSection title="Identity" defaultOpen>
         <div className="field-group">
           <label className="field-label">Entity ID</label>
-          <input
-            type="text"
-            className="field-input"
-            placeholder="light.salon"
+          <EntityPicker
             value={entityId}
-            onChange={(e) => setEntityId(e.target.value)}
+            onChange={setEntityId}
+            onSelect={(e) => { if (!label.trim() && e.friendly_name) setLabel(e.friendly_name); }}
+            placeholder="light.salon"
+            entities={haEntities}
+            className="field-input"
           />
         </div>
         <div className="field-group">
@@ -370,12 +374,12 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
 
         <div className="field-group">
           <label className="field-label">Double-tap Entity ID</label>
-          <input
-            type="text"
-            className="field-input"
-            placeholder="fan.ceiling_fan (optional)"
+          <EntityPicker
             value={doubleTapEntityId}
-            onChange={(e) => setDoubleTapEntityId(e.target.value)}
+            onChange={setDoubleTapEntityId}
+            placeholder="fan.ceiling_fan (optional)"
+            entities={haEntities}
+            className="field-input"
           />
           <span className="field-label" style={{ opacity: 0.5, fontSize: 11, marginTop: 2 }}>
             Toggle a secondary entity on double-tap

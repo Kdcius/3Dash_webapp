@@ -3,6 +3,7 @@ import type { DisplayAnimation, DisplayCondition, DisplayConfig, DisplaySource, 
 import { generateUUID } from '../utils/uuid';
 import LucideIcon from './SidePanel/cards/LucideIcon';
 import { FormPanel, AccordionSection } from './FormPanel';
+import EntityPicker, { type HAEntityOption } from './EntityPicker';
 
 const ANIMATION_OPTIONS: DisplayAnimation[] = ['spin', 'pulse', 'glow', 'bounce', 'flash'];
 
@@ -61,6 +62,7 @@ interface Props {
   onExitPlacingMode: () => void;
   onPreviewChange: (info: DisplayPreviewInfo) => void;
   placingMode: boolean;
+  haEntities?: HAEntityOption[];
 }
 
 const DEFAULT_SOURCE: DisplaySource = {
@@ -84,6 +86,7 @@ export default function DisplayForm({
   onExitPlacingMode,
   onPreviewChange,
   placingMode,
+  haEntities = [],
 }: Props) {
   const [label, setLabel] = useState('');
   const [sources, setSources] = useState<DisplaySource[]>([{ ...DEFAULT_SOURCE }]);
@@ -229,14 +232,16 @@ export default function DisplayForm({
             <div className="field-group">
               <label className="field-label">Entity ID</label>
               <div style={{ display: 'flex', gap: 4 }}>
-                <input
-                  type="text"
-                  className="field-input"
-                  style={{ flex: 1 }}
-                  placeholder="sensor.temperature"
-                  value={src.entityId}
-                  onChange={(e) => updateSource(i, { entityId: e.target.value })}
-                />
+                <div style={{ flex: 1 }}>
+                  <EntityPicker
+                    value={src.entityId}
+                    onChange={(v) => updateSource(i, { entityId: v })}
+                    onSelect={(e) => { if (i === 0 && !label.trim() && e.friendly_name) setLabel(e.friendly_name); }}
+                    placeholder="sensor.temperature"
+                    entities={haEntities}
+                    className="field-input"
+                  />
+                </div>
                 {sources.length > 1 && (
                   <button
                     className="light-item-del"

@@ -31,6 +31,10 @@ import {
   type DisplayMeshMap,
 } from '../../babylon/DisplayMeshFactory';
 import { getConfig, updateConfig, getModelBlob } from '../../services/configApi';
+import { getSetting } from '../../services/settingsStore';
+import { getEntityCache, setEntityCache } from '../../services/entityCache';
+import { HAConnection } from '../../services/haWebSocket';
+import type { HAEntityOption } from '../../components/EntityPicker';
 import LightList from '../../components/LightList';
 import LightForm, { type PreviewInfo, type LightFormHandle } from '../../components/LightForm';
 import DisplayList from '../../components/DisplayList';
@@ -43,7 +47,7 @@ import TubeForm, { type TubePreviewInfo } from '../../components/TubeForm';
 import { createTubeMeshes, removeTubeMeshes, disposeAllTubes, renderMockupLabels, type TubeMap } from '../../babylon/TubeMeshFactory';
 import GuidedTour from '../../components/GuidedTour/GuidedTour';
 import { editorTourSteps } from '../../components/GuidedTour/tourSteps';
-import type { LightConfig, LightGroup, DisplayConfig, ShadowWallConfig, TubeConfig, LightPosition } from '../../types';
+import type { LightConfig, LightGroup, DisplayConfig, ShadowWallConfig, TubeConfig, LightPosition, HAState } from '../../types';
 import './ConfigEditor.css';
 
 export default function ConfigEditor() {
@@ -70,6 +74,7 @@ export default function ConfigEditor() {
   const lightFormRef = useRef<LightFormHandle>(null);
   const tubeAnchorRef = useRef<Mesh | null>(null);
 
+  const [haEntities, setHaEntities] = useState<HAEntityOption[]>(() => getEntityCache());
   const [lights, setLights] = useState<LightConfig[]>([]);
   const [lightGroups, setLightGroups] = useState<LightGroup[]>([]);
   const [editIdx, setEditIdx] = useState<number | null>(null);
@@ -82,6 +87,28 @@ export default function ConfigEditor() {
 
   // Editor mode: lights, displays, walls, or tubes
   const [editorMode, setEditorMode] = useState<'lights' | 'displays' | 'walls' | 'tubes'>('lights');
+
+  // Load HA entity list for autocomplete in forms (cache-first, else fetch fresh).
+  useEffect(() => {
+    if (haEntities.length > 0) return;
+    const { mode, haSettings } = getSetting('connection');
+    if (mode !== 'live' || !haSettings.url || !haSettings.token) return;
+    const conn = new HAConnection(
+      { url: haSettings.url, port: haSettings.port, token: haSettings.token },
+      {
+        onInitialStates: (states: HAState[]) => {
+          const entities: HAEntityOption[] = states
+            .map(s => ({ entity_id: s.entity_id, friendly_name: s.attributes.friendly_name as string | undefined }))
+            .sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+          setEntityCache(entities);
+          setHaEntities(entities);
+          conn.dispose();
+        },
+      },
+    );
+    conn.connect();
+    return () => conn.dispose();
+  }, [haEntities.length]);
 
   // Display state
   const displayMeshMapRef = useRef<DisplayMeshMap>({});
@@ -1867,6 +1894,7 @@ export default function ConfigEditor() {
           onExitPlacingMode={exitPlacingMode}
           onPreviewChange={handlePreviewChange}
           placingMode={placingMode}
+          haEntities={haEntities}
         />
 
         <DisplayForm
@@ -1881,6 +1909,7 @@ export default function ConfigEditor() {
           onExitPlacingMode={exitPlacingMode}
           onPreviewChange={handleDisplayPreviewChange}
           placingMode={placingMode}
+          haEntities={haEntities}
         />
 
         <ShadowWallForm
@@ -1904,6 +1933,7 @@ export default function ConfigEditor() {
           onSave={handleSaveTube}
           onClose={handleCloseTubePanel}
           onPreviewChange={handleTubePreviewChange}
+          haEntities={haEntities}
         />
       </div>
 

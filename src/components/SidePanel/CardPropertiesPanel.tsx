@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { SidePanelCard } from '../../types';
+import EntityPicker, { type HAEntityOption } from '../EntityPicker';
 import './CardPropertiesPanel.css';
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
   onCancel: () => void;
   /** Called on every field change in edit mode so the grid updates live. */
   onPreview?: (card: SidePanelCard) => void;
+  haEntities?: HAEntityOption[];
 }
 
 type CardType = 'script' | 'indicator' | 'graph';
@@ -66,7 +68,7 @@ function buildCard(
   }
 }
 
-export default function CardPropertiesPanel({ card, onSave, onCancel, onPreview }: Props) {
+export default function CardPropertiesPanel({ card, onSave, onCancel, onPreview, haEntities = [] }: Props) {
   const isEdit = !!card;
 
   const [type, setType] = useState<CardType>(card?.type ?? 'indicator');
@@ -171,7 +173,13 @@ export default function CardPropertiesPanel({ card, onSave, onCancel, onPreview 
 
           <div className="card-props-field">
             <label>Entity ID</label>
-            <input value={entityId} onChange={e => setEntityId(e.target.value)} placeholder="sensor.temperature" />
+            <EntityPicker
+              value={entityId}
+              onChange={setEntityId}
+              onSelect={(e) => { if (!title.trim() && e.friendly_name) setTitle(e.friendly_name); }}
+              placeholder="sensor.temperature"
+              entities={haEntities}
+            />
           </div>
 
           {/* Type-specific fields */}
@@ -187,13 +195,13 @@ export default function CardPropertiesPanel({ card, onSave, onCancel, onPreview 
               <div className="card-props-section">Long Press Action</div>
               <div className="card-props-field">
                 <label>Entity ID</label>
-                <input value={longPressEntityId} onChange={e => setLongPressEntityId(e.target.value)} placeholder="script.my_action" />
+                <EntityPicker value={longPressEntityId} onChange={setLongPressEntityId} placeholder="script.my_action" entities={haEntities} />
               </div>
 
               <div className="card-props-section">Double Press Action</div>
               <div className="card-props-field">
                 <label>Entity ID</label>
-                <input value={doublePressEntityId} onChange={e => setDoublePressEntityId(e.target.value)} placeholder="script.my_action" />
+                <EntityPicker value={doublePressEntityId} onChange={setDoublePressEntityId} placeholder="script.my_action" entities={haEntities} />
               </div>
             </>
           )}
@@ -212,7 +220,7 @@ export default function CardPropertiesPanel({ card, onSave, onCancel, onPreview 
               </div>
               <div className="card-props-field">
                 <label>Climate Entity (optional)</label>
-                <input value={climateEntityId} onChange={e => setClimateEntityId(e.target.value)} placeholder="climate.thermostat" />
+                <EntityPicker value={climateEntityId} onChange={setClimateEntityId} placeholder="climate.thermostat" entities={haEntities} />
               </div>
             </>
           )}

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Animation, Camera, Color3, Color4, CubicEase, EasingFunction, ShadowGenerator, Tools, Vector3, type AbstractMesh, type Mesh, type Observer, type Scene } from '@babylonjs/core';
 import { createScene, setupSunShadows, type SceneContext } from '../../babylon/SceneManager';
@@ -20,6 +20,8 @@ import {
   type DisplayMeshMap,
 } from '../../babylon/DisplayMeshFactory';
 import { getConfig, updateConfig, getModelBlob } from '../../services/configApi';
+import { getEntityCache, setEntityCache } from '../../services/entityCache';
+import type { HAEntityOption } from '../../components/EntityPicker';
 import { getSetting, updateSettings, type HomeViewPose } from '../../services/settingsStore';
 import { HAConnection, type HAConnectionStatus, type HALike, setActiveHAConnection } from '../../services/haWebSocket';
 import { DemoHAConnection } from '../../services/demoHAConnection';
@@ -120,6 +122,11 @@ export default function Dashboard() {
   const [gridEditMode, setGridEditMode] = useState(false);
   const [cardPanelOpen, setCardPanelOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<SidePanelCard | null>(null);
+  // Snapshot the entity list when the card panel opens — keeps a stable ref for EntityPicker memoization.
+  const cardPanelEntities = useMemo<HAEntityOption[]>(
+    () => (cardPanelOpen ? getEntityCache() : []),
+    [cardPanelOpen],
+  );
   const [sidePanelConfig, setSidePanelConfig] = useState<import('../../types').SidePanelConfig | undefined>(undefined);
   const [showTour, setShowTour] = useState(
     () => localStorage.getItem('showTour') === 'true',
@@ -1058,6 +1065,11 @@ export default function Dashboard() {
         });
       },
       onInitialStates: (states: HAState[]) => {
+        setEntityCache(
+          states
+            .map(s => ({ entity_id: s.entity_id, friendly_name: s.attributes.friendly_name as string | undefined }))
+            .sort((a, b) => a.entity_id.localeCompare(b.entity_id)),
+        );
         const panelEntities = new Set<string>();
         for (const c of config.sidePanel?.cards ?? []) {
           panelEntities.add(c.entityId);
@@ -1570,6 +1582,7 @@ export default function Dashboard() {
       {cardPanelOpen && (
         <CardPropertiesPanel
           card={editingCard}
+          haEntities={cardPanelEntities}
           onSave={handleCardSave}
           onCancel={() => { setCardPanelOpen(false); setEditingCard(null); }}
           onPreview={handleCardPreview}
