@@ -1136,7 +1136,17 @@ export default function Dashboard() {
       ha.connect();
     }
 
+    // When the app returns to the foreground (e.g. after the WebView was
+    // suspended in the background for a long time), the socket may be a dead
+    // "zombie" that still reports OPEN. Force a fresh connection so the next
+    // entity tap works without needing to relaunch the app.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') haRef.current?.forceReconnect();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       haRef.current?.dispose();
       haRef.current = null;
       setActiveHAConnection(null);

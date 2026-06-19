@@ -13,6 +13,8 @@ export interface HALike {
   callService(domain: string, service: string, entityId: string, data?: Record<string, unknown>): Promise<void>;
   request(msg: Record<string, unknown>): Promise<unknown>;
   readonly isConnected: boolean;
+  /** Tear down the current socket and reconnect immediately. */
+  forceReconnect(): void;
   dispose(): void;
 }
 
@@ -39,6 +41,8 @@ export class HAConnection {
   private callbacks: HACallbacks;
   private options: HAConnectOptions;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
   private pendingResults = new Map<number, { resolve: (value?: unknown) => void; reject: (err: Error) => void }>();
 
@@ -73,11 +77,19 @@ export class HAConnection {
         this.send({ id: this.msgId++, type: 'subscribe_events', event_type: 'state_changed' });
         // Fetch initial states
         this.send({ id: this.msgId++, type: 'get_states' });
+        // Start pinging so a silently-dropped (zombie) socket is detected
+        this.startHeartbeat();
         return;
       }
 
       if (msg.type === 'auth_invalid') {
         this.callbacks.onStatusChanged?.('auth_error');
+        return;
+      }
+
+      if (msg.type === 'pong') {
+        // Socket is alive — cancel the pending zombie-reconnect
+        if (this.pongTimer) { clearTimeout(this.pongTimer); this.pongTimer = null; }
         return;
       }
 
@@ -104,12 +116,50 @@ export class HAConnection {
     };
 
     this.ws.onclose = () => {
+      this.stopHeartbeat();
       for (const p of this.pendingResults.values()) p.reject(new Error('Connection closed'));
       this.pendingResults.clear();
       if (this.disposed) return;
       this.callbacks.onStatusChanged?.('disconnected');
       this.reconnectTimer = setTimeout(() => this.connect(), 5000);
     };
+  }
+
+  /**
+   * Tear down the current socket (without waiting for `onclose`) and reconnect
+   * immediately. Use after the app returns from the background, where the OS may
+   * have killed the TCP connection while leaving the WebSocket reporting OPEN.
+   */
+  forceReconnect(): void {
+    if (this.disposed) return;
+    this.stopHeartbeat();
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.ws) {
+      // Detach handlers so the stale socket's onclose can't arm another reconnect
+      this.ws.onopen = this.ws.onmessage = this.ws.onerror = this.ws.onclose = null;
+      try { this.ws.close(); } catch { /* already closing */ }
+      this.ws = null;
+    }
+    // Fail any in-flight requests so callers don't hang on the dead socket
+    for (const p of this.pendingResults.values()) p.reject(new Error('Reconnecting'));
+    this.pendingResults.clear();
+    this.connect();
+  }
+
+  /** Periodically ping HA; if no pong returns in time, the socket is dead → reconnect. */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws?.readyState !== WebSocket.OPEN) return;
+      this.send({ id: this.msgId++, type: 'ping' });
+      if (this.pongTimer) clearTimeout(this.pongTimer);
+      this.pongTimer = setTimeout(() => this.forceReconnect(), 5000);
+    }, 20000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
+    if (this.pongTimer) { clearTimeout(this.pongTimer); this.pongTimer = null; }
   }
 
   callService(domain: string, service: string, entityId: string, data?: Record<string, unknown>): Promise<void> {
@@ -146,6 +196,7 @@ export class HAConnection {
 
   dispose(): void {
     this.disposed = true;
+    this.stopHeartbeat();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.ws?.close();
     this.ws = null;

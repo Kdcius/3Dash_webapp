@@ -225,6 +225,9 @@ export class DemoHAConnection {
     return !this.disposed;
   }
 
+  /** No-op: the demo adapter has no real socket to reconnect. */
+  forceReconnect(): void {}
+
   dispose(): void {
     this.disposed = true;
     if (this.sensorInterval != null) {
