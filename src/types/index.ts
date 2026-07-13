@@ -142,6 +142,44 @@ export interface OnboardingState {
   completed: boolean;
 }
 
+// --- Zones / Floors ---
+
+/**
+ * Controls which meshes of the loaded model are visible while a zone is active.
+ * Matching is done against mesh (node) names exported from the modeling tool,
+ * e.g. prefix "GF_" for all ground-floor meshes.
+ */
+export interface ZoneMeshFilter {
+  mode: 'include' | 'exclude';
+  /** Mesh-name prefixes (case-insensitive). */
+  prefixes: string[];
+}
+
+/** Camera pose to fly to when a zone is activated. */
+export interface ZoneCameraPose {
+  alpha: number;
+  beta: number;
+  radius: number;
+  target: { x: number; y: number; z: number };
+}
+
+export interface ZoneConfig {
+  id: string;
+  name: string;
+  /** Lucide icon name shown in the zone switcher (e.g. "Home", "Car", "Trees"). */
+  icon?: string;
+  /**
+   * Separate model for this zone, stored in IndexedDB under this key
+   * (and optionally mirrored to HA at /local/3dash/<modelKey>.glb).
+   * When undefined, the zone uses the main model with `meshFilter` applied.
+   */
+  modelKey?: string;
+  /** Visibility filter applied to the main model when this zone is active. */
+  meshFilter?: ZoneMeshFilter;
+  /** Optional camera pose to animate to when switching to this zone. */
+  cameraPose?: ZoneCameraPose | null;
+}
+
 export interface AppConfig {
   location: {
     latitude: number;
@@ -156,6 +194,12 @@ export interface AppConfig {
   sidePanel?: SidePanelConfig;
   tubes?: TubeConfig[];
   onboarding?: OnboardingState;
+  /** Multi-floor / area definitions. Empty or undefined = single-zone mode. */
+  zones?: ZoneConfig[];
+  /** Currently selected zone (persists across sessions/devices). */
+  activeZoneId?: string;
+  /** Last-modified timestamp (ms epoch) used for cross-device sync conflict resolution. */
+  updatedAt?: number;
 }
 
 export interface HASettings {

@@ -62,6 +62,15 @@ export interface MiscSettings {
   panelRatio: number | null;
 }
 
+export interface SyncSettings {
+  /** Auto-sync config to HA's frontend user-data store (cross-device sync). */
+  autoSync: boolean;
+  /** Where the 3D model is loaded from: this device's IndexedDB, or HA's /local/3dash/. */
+  modelSource: 'device' | 'ha';
+  /** Model file name (without .glb) under config/www/3dash/ when modelSource is 'ha'. */
+  modelName: string;
+}
+
 /* ── Root interface ── */
 
 export interface AppSettings {
@@ -71,6 +80,7 @@ export interface AppSettings {
   environment: EnvironmentSettings;
   controls: ControlsSettings;
   misc: MiscSettings;
+  sync: SyncSettings;
 }
 
 /* ── Section type (for getSetting / updateSettings) ── */
@@ -122,6 +132,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   misc: {
     panelRatio: null,
+  },
+  sync: {
+    autoSync: false,
+    modelSource: 'device',
+    modelName: 'model',
   },
 };
 
@@ -258,6 +273,7 @@ export function getSettings(): AppSettings {
       environment: { ...DEFAULT_SETTINGS.environment, ...parsed.environment },
       controls: { ...DEFAULT_SETTINGS.controls, ...parsed.controls },
       misc: { ...DEFAULT_SETTINGS.misc, ...parsed.misc },
+      sync: { ...DEFAULT_SETTINGS.sync, ...parsed.sync },
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

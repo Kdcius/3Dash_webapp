@@ -637,3 +637,20 @@
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+
+/* ── Zones editor ── */
+.settings-zones-hint {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.settings-zone-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border, #1e293b);
+  margin-bottom: 8px;
+}

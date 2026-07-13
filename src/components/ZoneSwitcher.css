@@ -1,0 +1,83 @@
+.zone-switcher {
+  position: absolute;
+  bottom: 84px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 40;
+  pointer-events: auto;
+}
+
+.zone-fab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border, #1e293b);
+  background: var(--panel-bg, rgba(15, 23, 42, 0.85));
+  color: var(--text, #e2e8f0);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.zone-fab:hover {
+  border-color: var(--green, #4ade80);
+  transform: translateY(-1px);
+}
+
+.zone-fab-label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-right: 4px;
+}
+
+.zone-switcher-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  animation: zone-menu-in 0.18s ease-out;
+}
+
+.zone-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #1e293b);
+  background: var(--panel-bg, rgba(15, 23, 42, 0.85));
+  color: var(--text, #e2e8f0);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.zone-pill:hover { border-color: var(--green, #4ade80); }
+
+.zone-pill.active {
+  border-color: var(--green, #4ade80);
+  color: var(--green, #4ade80);
+}
+
+@keyframes zone-menu-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .zone-switcher { bottom: 96px; right: 12px; }
+}
