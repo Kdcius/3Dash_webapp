@@ -44,7 +44,9 @@ export function getConfig(): AppConfig {
   const raw = localStorage.getItem(CONFIG_KEY);
   if (!raw) return { ...DEFAULT_CONFIG };
   try {
-    return JSON.parse(raw) as AppConfig;
+    // Merge over defaults so required fields (lights, location) always exist,
+    // even for configs imported from backups or pulled from HA sync.
+    return { ...DEFAULT_CONFIG, ...(JSON.parse(raw) as Partial<AppConfig>) } as AppConfig;
   } catch {
     return { ...DEFAULT_CONFIG };
   }
