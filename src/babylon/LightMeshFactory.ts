@@ -109,6 +109,13 @@ export function createLightMesh(
     bulb.applyFog = false;
   }
 
+  // Hidden lights: bulb mesh invisible but still pickable (visibility ≠ isVisible).
+  // Only in live view (withPointLight) — the editor must keep the bulb visible for editing.
+  if (cfg.hidden && withPointLight) {
+    bulb.visibility = 0;
+    for (const eb of extraBulbs) eb.visibility = 0;
+  }
+
   let pointLight: PointLight | undefined;
   let shadowGen: ShadowGenerator | undefined;
   const stripLights: PointLight[] = [];

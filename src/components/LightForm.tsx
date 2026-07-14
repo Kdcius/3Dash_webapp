@@ -102,6 +102,7 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
   const [warmth, setWarmth] = useState(3000);
   const [brightness, setBrightness] = useState(1);
   const [doubleTapEntityId, setDoubleTapEntityId] = useState('');
+  const [hidden, setHidden] = useState(false);
 
   // Multi-part state
   const [multiPart, setMultiPart] = useState(false);
@@ -152,6 +153,7 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
       setWarmth(editLight.warmth ?? 3000);
       setBrightness(editLight.brightness ?? 1);
       setDoubleTapEntityId(editLight.doubleTapEntityId ?? '');
+      setHidden(!!editLight.hidden);
       const hasParts = editLight.parts && editLight.parts.length > 0;
       setMultiPart(!!hasParts);
       setParts(hasParts ? editLight.parts!.map(partFromConfig) : []);
@@ -176,6 +178,7 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
       setWarmth(3000);
       setBrightness(1);
       setDoubleTapEntityId('');
+      setHidden(false);
       setMultiPart(false);
       setParts([]);
       setUseCustomHitbox(false);
@@ -245,6 +248,7 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
       brightness,
       hitbox,
       doubleTapEntityId: doubleTapEntityId.trim() || undefined,
+      hidden: hidden || undefined,
     };
 
     if (multiPart && parts.length > 0) {
@@ -261,7 +265,7 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
     }
 
     onSave(cfg);
-  }, [entityId, label, type, shape, diameter, width, height, depth, position, warmth, brightness, doubleTapEntityId, onSave, useCustomHitbox, multiPart, parts, hbShape, hbDiameter, hbWidth, hbHeight, hbDepth, hbPosX, hbPosY, hbPosZ]);
+  }, [entityId, label, type, shape, diameter, width, height, depth, position, warmth, brightness, doubleTapEntityId, hidden, onSave, useCustomHitbox, multiPart, parts, hbShape, hbDiameter, hbWidth, hbHeight, hbDepth, hbPosX, hbPosY, hbPosZ]);
 
   const handlePosChange = useCallback(
     (axis: 'x' | 'y' | 'z', value: number) => {
@@ -388,6 +392,16 @@ const LightForm = forwardRef<LightFormHandle, Props>(function LightForm({
       </AccordionSection>
 
       <AccordionSection title="Shape">
+        <div className="field-group">
+          <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={hidden}
+              onChange={(e) => setHidden(e.target.checked)}
+            />
+            Invisible (no bulb mesh — still clickable, still lights the room)
+          </label>
+        </div>
         <div className="field-group">
           <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input

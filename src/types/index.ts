@@ -58,6 +58,8 @@ export interface LightConfig {
   modeEntityId?: string;
   /** Secondary entity ID to toggle on double-tap (e.g., a fan entity attached to a ceiling light). */
   doubleTapEntityId?: string;
+  /** Hide the bulb mesh entirely — the light stays clickable and still illuminates the room. */
+  hidden?: boolean;
 }
 
 export interface LightGroup {
