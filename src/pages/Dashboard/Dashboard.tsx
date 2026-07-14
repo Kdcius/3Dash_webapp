@@ -19,7 +19,7 @@ import {
   setDisplayAnimation,
   type DisplayMeshMap,
 } from '../../babylon/DisplayMeshFactory';
-import { getConfig, updateConfig, getModelBlob, replaceConfig, setConfigChangedHook } from '../../services/configApi';
+import { getConfig, updateConfig, getModelBlob, replaceConfig, setConfigChangedHook, hasConfig } from '../../services/configApi';
 import { schedulePush, syncOnConnect, fetchModelFromHA } from '../../services/haSync';
 import ToastHost, { showToast } from '../../components/Toast';
 import ZoneSwitcher from '../../components/ZoneSwitcher';
@@ -1677,7 +1677,13 @@ export default function Dashboard() {
         onCardDelete={handleCardDelete}
         onExitSimulation={simulationMode ? () => {
           setSimulationMode(false);
-          navigate('/onboarding');
+          // Configured devices return to their live dashboard; a full reload
+          // clears all in-memory simulation state (HA adapter, model, config).
+          if (hasConfig() && (getConfig().onboarding?.completed ?? false)) {
+            window.location.reload();
+          } else {
+            navigate('/onboarding');
+          }
         } : undefined}
       />
       {cardPanelOpen && (
