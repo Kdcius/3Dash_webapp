@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { testHA } from '../Onboarding/steps/HASetupStep';
 import { updateSettings } from '../../services/settingsStore';
-import { updateConfig, getConfig } from '../../services/configApi';
+import { updateConfig, getConfig, replaceConfig } from '../../services/configApi';
 
 /**
  * One-tap device setup: /#/connect?ha_url=...&ha_port=...&ha_token=...
@@ -45,6 +45,9 @@ export default function Connect() {
         onboarding: { completed: true },
         location: cfg.location ?? { latitude: 51.0, longitude: 10.0 },
       });
+      // Zero the timestamp: this device starts empty, so any remote config
+      // must win the first sync instead of being clobbered by this stub.
+      replaceConfig({ ...getConfig(), updatedAt: 0 });
 
       navigate('/', { replace: true });
     })();

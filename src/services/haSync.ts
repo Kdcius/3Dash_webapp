@@ -110,6 +110,18 @@ export async function syncOnConnect(local: AppConfig): Promise<SyncResult> {
   const remote = await pullRemoteConfig();
   const localTs = local.updatedAt ?? 0;
 
+  // Safety net: a device with no content (fresh /connect or new sign-in)
+  // must never overwrite a configured remote, whatever the timestamps say.
+  const localEmpty = !local.lights?.length && !local.displays?.length
+    && !local.tubes?.length && !local.zones?.length;
+  const remoteHasContent = !!(remote && (remote.config.lights?.length
+    || remote.config.displays?.length || remote.config.tubes?.length
+    || remote.config.zones?.length));
+  if (localEmpty && remoteHasContent) {
+    report('synced');
+    return { action: 'pulled', remoteConfig: remote!.config };
+  }
+
   if (!remote || remote.updatedAt < localTs) {
     // Local is newer (or remote empty) → publish local
     await pushConfigToHA(local);
