@@ -29,10 +29,43 @@ export interface HAConnectOptions {
   token: string;
 }
 
-/** Build a WebSocket URL, using wss:// when the page is served over HTTPS. */
+/**
+ * Build a WebSocket URL from a user-entered host.
+ *
+ * Accepts a bare host/IP ("192.168.1.10"), a host with inline port
+ * ("ha.local:8123", which overrides the port field), or a full URL
+ * ("https://ha.example.com/"). An explicit http/https (or ws/wss) scheme
+ * decides ws:// vs wss:// — required when HA itself uses SSL but this page is
+ * served over plain HTTP (e.g. the add-on). Without a scheme, wss:// is used
+ * when the page is served over HTTPS (browsers block ws:// from HTTPS pages).
+ */
 export function buildWsUrl(url: string, port: number): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${protocol}://${url}:${port}/api/websocket`;
+  let input = url.trim();
+
+  let protocol: 'ws' | 'wss' | null = null;
+  const scheme = input.match(/^(https?|wss?):\/\//i);
+  if (scheme) {
+    protocol = /^(https|wss)$/i.test(scheme[1]) ? 'wss' : 'ws';
+    input = input.slice(scheme[0].length);
+  } else {
+    protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  }
+
+  // Keep only host[:port] — drop any path, query, or trailing slash
+  input = input.split('/')[0];
+
+  let host = input;
+  let effectivePort = port;
+  if (!input.startsWith('[')) { // skip IPv6 literals like [::1]
+    const colon = input.lastIndexOf(':');
+    const inlinePort = colon !== -1 ? parseInt(input.slice(colon + 1), 10) : NaN;
+    if (!isNaN(inlinePort)) {
+      host = input.slice(0, colon);
+      effectivePort = inlinePort;
+    }
+  }
+
+  return `${protocol}://${host}:${effectivePort}/api/websocket`;
 }
 
 export class HAConnection {

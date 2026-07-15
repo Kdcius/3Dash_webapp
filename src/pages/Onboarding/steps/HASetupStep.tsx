@@ -22,7 +22,15 @@ export async function testHA(url: string, port: number, token: string): Promise<
         clearTimeout(timeout); ws.close(); resolve({ success: false, error: 'Invalid token' });
       }
     };
-    ws.onerror = () => { clearTimeout(timeout); ws.close(); resolve({ success: false, error: 'Connection failed' }); };
+    ws.onerror = () => {
+      clearTimeout(timeout); ws.close();
+      // A bare host from an HTTP page is tried over plain ws:// — if HA itself
+      // uses SSL, that handshake fails, so point the user at an https:// URL.
+      const hint = !/^(https?|wss?):\/\//i.test(url.trim()) && window.location.protocol !== 'https:'
+        ? ' — if your Home Assistant uses HTTPS/SSL, enter its full URL (https://...)'
+        : '';
+      resolve({ success: false, error: `Connection failed${hint}` });
+    };
   });
 }
 
@@ -105,7 +113,7 @@ export default function HASetupStep({ onComplete, initialHA }: Props) {
           <input
             className="onboarding-input"
             type="text"
-            placeholder="192.168.1.xxx"
+            placeholder="192.168.1.xxx or https://ha.example.com"
             value={url}
             onChange={(e) => { setUrl(e.target.value); setStatus('idle'); }}
           />
