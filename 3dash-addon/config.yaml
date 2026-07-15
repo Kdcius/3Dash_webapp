@@ -1,8 +1,9 @@
 name: "3Dash"
-version: "1.2.7"
+version: "1.2.8"
 slug: "3dash"
 description: "3D Dashboard for Home Assistant"
 url: "https://github.com/kdcius/3Dash_webapp"
+image: "ghcr.io/kdcius/{arch}-addon-3dash"
 arch:
   - amd64
   - aarch64

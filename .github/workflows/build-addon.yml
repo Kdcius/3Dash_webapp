@@ -1,0 +1,48 @@
+name: Build add-on images
+
+# Publishes prebuilt multi-arch add-on images to GHCR so users' Home Assistant
+# machines pull a small image instead of compiling the SPA locally.
+# Runs on version bumps (config.yaml) or manually. Image tags come from the
+# `version` field in 3dash-addon/config.yaml.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 3dash-addon/config.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, aarch64, armv7]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -- --mode addon
+      - name: Copy SPA into add-on build context
+        run: cp -r dist 3dash-addon/dist
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push ${{ matrix.arch }} image
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --${{ matrix.arch }} \
+            --target /data/3dash-addon \
+            --image "{arch}-addon-3dash" \
+            --docker-hub "ghcr.io/kdcius" \
+            --addon
