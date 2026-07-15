@@ -7,7 +7,6 @@ image: "ghcr.io/kdcius/{arch}-addon-3dash"
 arch:
   - amd64
   - aarch64
-  - armv7
 ingress: false
 ports:
   8099/tcp: 8099

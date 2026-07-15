@@ -1,9 +1,13 @@
 name: Build add-on images
 
-# Publishes prebuilt multi-arch add-on images to GHCR so users' Home Assistant
-# machines pull a small image instead of compiling the SPA locally.
+# Publishes prebuilt add-on images to GHCR so users' Home Assistant machines
+# pull a small image instead of compiling the SPA locally.
 # Runs on version bumps (config.yaml) or manually. Image tags come from the
 # `version` field in 3dash-addon/config.yaml.
+#
+# Uses the composable home-assistant/builder actions (the legacy monolithic
+# builder action is deprecated). These support amd64 + aarch64 only — armv7
+# was dropped along with HA's 32-bit platform support.
 on:
   push:
     branches: [main]
@@ -11,18 +15,50 @@ on:
       - 3dash-addon/config.yaml
   workflow_dispatch:
 
+env:
+  ARCHITECTURES: '["amd64", "aarch64"]'
+  IMAGE_NAME: addon-3dash
+
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  build:
+  init:
+    name: Initialize build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64, aarch64, armv7]
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read add-on version
+        id: version
+        run: echo "version=$(grep -Po '^version:\s*"\K[^"]+' 3dash-addon/config.yaml)" >> "$GITHUB_OUTPUT"
+
+      - name: Get build matrix
+        id: matrix
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@2026.06.0
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          image-name: ${{ env.IMAGE_NAME }}
+          # Explicit lowercase prefix — GHCR rejects the default-cased repo owner
+          registry-prefix: ghcr.io/kdcius
+
+  build:
+    name: Build ${{ matrix.arch }} image
+    needs: init
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read # To check out the code
+      id-token: write # For Cosign image signing (OIDC token)
+      packages: write # To push images to GHCR
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.init.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -31,18 +67,18 @@ jobs:
       - run: npm run build -- --mode addon
       - name: Copy SPA into add-on build context
         run: cp -r dist 3dash-addon/dist
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+
+      - name: Build and push image
+        uses: home-assistant/builder/actions/build-image@2026.06.0
         with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push ${{ matrix.arch }} image
-        uses: home-assistant/builder@master
-        with:
-          args: |
-            --${{ matrix.arch }} \
-            --target /data/3dash-addon \
-            --image "{arch}-addon-3dash" \
-            --docker-hub "ghcr.io/kdcius" \
-            --addon
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: 3dash-addon
+          image: ${{ matrix.image }}
+          image-tags: |
+            ${{ needs.init.outputs.version }}
+            latest
+          push: "true"
+          version: ${{ needs.init.outputs.version }}
+          build-args: |
+            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:3.20
