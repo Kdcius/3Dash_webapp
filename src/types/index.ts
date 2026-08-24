@@ -184,6 +184,10 @@ export interface HAStateAttributes {
   color_temp?: number;
   rgb_color?: [number, number, number];
   white_value?: number;
+  /** Fan speed as a percentage, 0-100. Present on entities in the `fan` domain. */
+  percentage?: number;
+  /** Size of one speed step, i.e. 100 / speed_count. Used to snap the slider. */
+  percentage_step?: number;
   [key: string]: unknown;
 }
 

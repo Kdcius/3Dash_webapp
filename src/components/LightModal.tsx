@@ -16,6 +16,9 @@ interface Props {
   onColorTemp: (entityId: string, colorTemp: number) => void;
   onColor: (entityId: string, color: { r: number; g: number; b: number }, brightness: number) => void;
   onWhiteChannel: (entityId: string, white: number) => void;
+  /** Sets speed on a fan-domain entity. Used for the double-tap entity when it
+   *  is a fan, e.g. a ceiling fan attached to a ceiling light. */
+  onFanSpeed?: (entityId: string, percentage: number) => void;
   doubleTapEntityId?: string;
   doubleTapState?: HAState | null;
 }
@@ -32,6 +35,7 @@ export default function LightModal({
   onColorTemp,
   onColor,
   onWhiteChannel,
+  onFanSpeed,
   doubleTapEntityId,
   doubleTapState,
 }: Props) {
@@ -42,6 +46,7 @@ export default function LightModal({
   const [whiteKelvin, setWhiteKelvin] = useState(4000);
   const [isOn, setIsOn] = useState(false);
   const [dtIsOn, setDtIsOn] = useState(false);
+  const [fanPercent, setFanPercent] = useState(0);
 
   // Sync state when modal opens or state changes
   useEffect(() => {
@@ -68,6 +73,8 @@ export default function LightModal({
 
   useEffect(() => {
     setDtIsOn(doubleTapState?.state === 'on');
+    const pct = doubleTapState?.attributes?.percentage;
+    if (typeof pct === 'number') setFanPercent(pct);
   }, [doubleTapState]);
 
   const handleDoubleTapToggle = useCallback(() => {
@@ -75,6 +82,19 @@ export default function LightModal({
     onToggle(doubleTapEntityId);
     setDtIsOn((prev) => !prev);
   }, [doubleTapEntityId, onToggle]);
+
+  const handleFanSpeedChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      // parseFloat, not parseInt: the step is 100 / speed_count and is usually
+      // fractional, so truncating would drift a little further off with every
+      // notch. Home Assistant wants a whole percentage, so round only on the
+      // way out and keep the exact value for the slider position.
+      const val = parseFloat(e.target.value);
+      setFanPercent(val);
+      if (doubleTapEntityId && onFanSpeed) onFanSpeed(doubleTapEntityId, Math.round(val));
+    },
+    [doubleTapEntityId, onFanSpeed],
+  );
 
   const handleToggle = useCallback(() => {
     if (!entityId) return;
@@ -139,6 +159,18 @@ export default function LightModal({
   const showColor = lightType === 'rgb' || lightType === 'rgbw';
   const showWhite = lightType === 'rgbw';
 
+  // A fan attached via double-tap gets its own speed slider. Keyed off the
+  // entity domain rather than the light type, so any fan works without needing
+  // a separate light type.
+  const showFanSpeed = !!doubleTapEntityId && doubleTapEntityId.startsWith('fan.') && !!onFanSpeed;
+  // Home Assistant reports 100 / speed_count as percentage_step. Snapping the
+  // slider to it means every drag lands on a real speed instead of a value the
+  // fan has to round, which would make the slider jump back under your finger.
+  const rawStep = doubleTapState?.attributes?.percentage_step;
+  const fanStep = typeof rawStep === 'number' && rawStep > 0 ? rawStep : 1;
+  const fanSpeedCount = Math.max(1, Math.round(100 / fanStep));
+  const fanSpeedIndex = Math.round(fanPercent / fanStep);
+
   return (
     <div
       className={`modal-backdrop${visible ? ' visible' : ''}`}
@@ -191,6 +223,27 @@ export default function LightModal({
                 <div className="toggle-track" />
                 <div className="toggle-thumb" />
               </label>
+            </div>
+          )}
+
+          {/* Fan speed, for a fan attached via double-tap */}
+          {showFanSpeed && (
+            <div className="modal-slider-wrap">
+              <div className="slider-header">
+                <span className="modal-label">Speed</span>
+                <span className="slider-value">
+                  {fanSpeedIndex === 0 ? 'Off' : `${fanSpeedIndex} / ${fanSpeedCount}`}
+                </span>
+              </div>
+              <input
+                type="range"
+                className="modal-slider fan-speed"
+                min={0}
+                max={100}
+                step={fanStep}
+                value={fanPercent}
+                onChange={handleFanSpeedChange}
+              />
             </div>
           )}
 

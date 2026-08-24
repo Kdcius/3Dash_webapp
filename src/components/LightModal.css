@@ -182,6 +182,10 @@
   background: linear-gradient(to right, #1e293b, #ffffff);
 }
 
+.modal-slider.fan-speed {
+  background: linear-gradient(to right, #1e293b, #38bdf8);
+}
+
 .modal-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px; height: 14px;

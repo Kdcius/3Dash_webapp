@@ -1255,6 +1255,14 @@ export default function Dashboard() {
     ha.callService('light', 'turn_on', entityId, { brightness });
   }, []);
 
+  // Fan speed. Separate from brightness because the fan domain takes a
+  // percentage via set_percentage rather than a 0-255 brightness on turn_on.
+  const handleFanSpeed = useCallback((entityId: string, percentage: number) => {
+    const ha = haRef.current;
+    if (!ha?.isConnected) return;
+    ha.callService('fan', 'set_percentage', entityId, { percentage });
+  }, []);
+
   const handleColorTemp = useCallback((entityId: string, colorTemp: number) => {
     const ha = haRef.current;
     if (!ha?.isConnected) return;
@@ -1643,6 +1651,7 @@ export default function Dashboard() {
           onColorTemp={handleColorTemp}
           onColor={handleColor}
           onWhiteChannel={handleWhiteChannel}
+          onFanSpeed={handleFanSpeed}
           doubleTapEntityId={modalDoubleTapEntityId}
           doubleTapState={modalDoubleTapState}
         />
