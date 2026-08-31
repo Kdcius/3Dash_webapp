@@ -136,6 +136,21 @@ export const SIMULATION_CONFIG: AppConfig = {
     },
   ],
   onboarding: { completed: true },
+  // Demo zones: camera-pose presets (no mesh filter on the single demo model)
+  zones: [
+    {
+      id: 'outside',
+      name: 'Outside',
+      icon: 'Trees',
+      cameraPose: { alpha: 4.0, beta: 1.2, radius: 26, target: { x: -4.5, y: 0, z: -5 } },
+    },
+    {
+      id: 'inside',
+      name: 'Inside',
+      icon: 'Home',
+      cameraPose: { alpha: 4.712, beta: 0.01, radius: 14, target: { x: -4.5, y: 0, z: -5 } },
+    },
+  ],
   shadowWalls: [
     {
       id: '5a31101b-e20c-4c78-be48-83d1fe5e0fd7',
@@ -346,6 +361,11 @@ export const SIMULATION_SETTINGS: AppSettings = {
   },
   misc: {
     panelRatio: null,
+  },
+  sync: {
+    autoSync: false,
+    modelSource: 'device',
+    modelName: 'model',
   },
 };
 

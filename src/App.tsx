@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard/Dashboard';
 
 const ConfigEditor = lazy(() => import('./pages/ConfigEditor/ConfigEditor'));
 const Onboarding = lazy(() => import('./pages/Onboarding/Onboarding'));
+const Connect = lazy(() => import('./pages/Connect/Connect'));
 
 function AppRoutes() {
   const location = useLocation();
@@ -19,8 +20,8 @@ function AppRoutes() {
   const onboardingDone = configExists && (getConfig().onboarding?.completed ?? false);
 
   // Redirect to onboarding if not completed and not already there
-  // (simulation mode bypasses onboarding)
-  if (!onboardingDone && !simulationMode && location.pathname !== '/onboarding') {
+  // (simulation mode and the one-tap /connect link bypass onboarding)
+  if (!onboardingDone && !simulationMode && location.pathname !== '/onboarding' && location.pathname !== '/connect') {
     return <Navigate to="/onboarding" replace />;
   }
 
@@ -29,6 +30,7 @@ function AppRoutes() {
       <Route path="/" element={<Dashboard />} />
       <Route path="/editor" element={<Suspense fallback={null}><ConfigEditor /></Suspense>} />
       <Route path="/onboarding" element={<Suspense fallback={null}><Onboarding /></Suspense>} />
+      <Route path="/connect" element={<Suspense fallback={null}><Connect /></Suspense>} />
     </Routes>
   );
 }

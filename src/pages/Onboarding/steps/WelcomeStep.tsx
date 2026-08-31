@@ -37,6 +37,9 @@ export default function WelcomeStep({ onConnect, onSimulation, onImport }: Props
         <button className="onboarding-btn simulation" onClick={onSimulation} disabled={importing}>
           Try Simulation
         </button>
+        <p className="onboarding-welcome-simulation-hint">
+          Preview only — a sample apartment with fake data, not your real setup
+        </p>
         <button
           className="onboarding-btn import"
           onClick={() => fileRef.current?.click()}

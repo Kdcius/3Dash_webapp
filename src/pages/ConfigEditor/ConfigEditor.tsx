@@ -31,6 +31,7 @@ import {
   type DisplayMeshMap,
 } from '../../babylon/DisplayMeshFactory';
 import { getConfig, updateConfig, getModelBlob } from '../../services/configApi';
+import { fetchModelFromHA } from '../../services/haSync';
 import { getSetting } from '../../services/settingsStore';
 import { getEntityCache, setEntityCache } from '../../services/entityCache';
 import { HAConnection } from '../../services/haWebSocket';
@@ -481,8 +482,17 @@ export default function ConfigEditor() {
         setTubes(config.tubes || []);
         tubesRef.current = config.tubes || [];
 
-        // Load model from IndexedDB
-        const modelBlob = await getModelBlob();
+        // Load model from the same source the dashboard uses (HA or device)
+        let modelBlob: Blob | null = null;
+        const syncSettings = getSetting('sync');
+        if (syncSettings.modelSource === 'ha') {
+          modelBlob = await fetchModelFromHA(syncSettings.modelName);
+          if (!modelBlob) {
+            modelBlob = await getModelBlob();
+          }
+        } else {
+          modelBlob = await getModelBlob();
+        }
         if (!modelBlob) {
           navigate('/onboarding');
           return;

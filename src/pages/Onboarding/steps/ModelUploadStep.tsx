@@ -1,25 +1,55 @@
 import { useState, useRef, useCallback } from 'react';
 import { uploadModel } from '../../../services/configApi';
+import { validateGlb } from '../../../utils/validateGlb';
+import { showToast } from '../../../components/Toast';
 
 interface Props {
   onComplete: () => void;
 }
 
+const MAX_RECOMMENDED_MB = 50;
+
 export default function ModelUploadStep({ onComplete }: Props) {
   const [file, setFile] = useState<File | null>(null);
+  const [modelInfo, setModelInfo] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback((f: File) => {
-    if (!f.name.endsWith('.glb')) {
-      setError('Only .glb files are supported');
+  const handleFile = useCallback(async (f: File) => {
+    setError('');
+    setModelInfo('');
+    setFile(null);
+
+    if (!f.name.toLowerCase().endsWith('.glb')) {
+      setError('Only .glb files are supported (binary glTF). If you have a .gltf, re-export as .glb.');
       return;
     }
+
+    // Structural validation before accepting the file
+    setValidating(true);
+    const result = await validateGlb(f);
+    setValidating(false);
+
+    if (!result.valid) {
+      setError(result.error ?? 'The file is not a valid 3D model.');
+      showToast('error', 'Model validation failed');
+      return;
+    }
+
     setFile(f);
-    setError('');
+    const parts = [`${result.meshCount} mesh${result.meshCount === 1 ? '' : 'es'}`];
+    if (result.generator) parts.push(`exported from ${result.generator.split(' ')[0]}`);
+    setModelInfo(parts.join(' · '));
+
+    if (f.size > MAX_RECOMMENDED_MB * 1024 * 1024) {
+      showToast('warning', `Model is ${(f.size / 1048576).toFixed(0)} MB — may be slow on mobile devices`);
+    } else {
+      showToast('success', 'Valid 3D model');
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -35,7 +65,7 @@ export default function ModelUploadStep({ onComplete }: Props) {
     setProgress(0);
     setError('');
 
-    // Simulate progress since fetch doesn't give upload progress easily
+    // Simulate progress since IndexedDB writes don't report progress
     const progressInterval = setInterval(() => {
       setProgress((p) => Math.min(p + 15, 90));
     }, 200);
@@ -44,13 +74,15 @@ export default function ModelUploadStep({ onComplete }: Props) {
       await uploadModel(file);
       clearInterval(progressInterval);
       setProgress(100);
+      showToast('success', 'Model saved');
       setTimeout(() => {
         setUploading(false);
         onComplete();
       }, 400);
     } catch {
       clearInterval(progressInterval);
-      setError('Upload failed. Please try again.');
+      setError('Saving the model failed. Please try again.');
+      showToast('error', 'Saving the model failed');
       setUploading(false);
       setProgress(0);
     }
@@ -87,13 +119,13 @@ export default function ModelUploadStep({ onComplete }: Props) {
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
       >
-        <div className="onboarding-upload-icon">{file ? '\u2713' : '\u21A5'}</div>
+        <div className="onboarding-upload-icon">{file ? '✓' : '↥'}</div>
         <div className="onboarding-upload-text">
-          {file ? '' : 'Drop your .glb file here or click to browse'}
+          {validating ? 'Validating model…' : file ? '' : 'Drop your .glb file here or click to browse'}
         </div>
         {file && (
           <div className="onboarding-upload-file">
-            {file.name} ({formatSize(file.size)})
+            {file.name} ({formatSize(file.size)}){modelInfo ? ` — ${modelInfo}` : ''}
           </div>
         )}
         {uploading && (
@@ -114,13 +146,14 @@ export default function ModelUploadStep({ onComplete }: Props) {
           <li>Use real-world scale in meters</li>
           <li>Keep polygon count reasonable for performance</li>
           <li>The model will be auto-scaled if units are in millimeters</li>
+          <li>For cross-device use, also copy the file to Home Assistant at <code>config/www/3dash/model.glb</code></li>
         </ul>
       </div>
 
       <button
         className="onboarding-btn primary"
         onClick={handleUpload}
-        disabled={!file || uploading}
+        disabled={!file || uploading || validating}
       >
         {uploading ? 'Uploading...' : 'Upload & Continue'}
       </button>

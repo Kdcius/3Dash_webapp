@@ -19,7 +19,10 @@ import {
   setDisplayAnimation,
   type DisplayMeshMap,
 } from '../../babylon/DisplayMeshFactory';
-import { getConfig, updateConfig, getModelBlob } from '../../services/configApi';
+import { getConfig, updateConfig, getModelBlob, replaceConfig, setConfigChangedHook, hasConfig } from '../../services/configApi';
+import { schedulePush, syncOnConnect, fetchModelFromHA } from '../../services/haSync';
+import ToastHost, { showToast } from '../../components/Toast';
+import ZoneSwitcher from '../../components/ZoneSwitcher';
 import { getEntityCache, setEntityCache } from '../../services/entityCache';
 import type { HAEntityOption } from '../../components/EntityPicker';
 import { getSetting, updateSettings, type HomeViewPose } from '../../services/settingsStore';
@@ -46,7 +49,7 @@ import GuidedTour from '../../components/GuidedTour/GuidedTour';
 import { dashboardTourSteps } from '../../components/GuidedTour/tourSteps';
 import CardPropertiesPanel from '../../components/SidePanel/CardPropertiesPanel';
 import { SIMULATION_CONFIG, SIMULATION_MODEL_URL } from '../../data/simulationData';
-import type { AppConfig, DisplayConfig, LightConfig, RemoteButton, HAState, CardLayout, SidePanelCard } from '../../types';
+import type { AppConfig, DisplayConfig, LightConfig, RemoteButton, HAState, CardLayout, SidePanelCard, ZoneConfig } from '../../types';
 import './Dashboard.css';
 
 const LONG_PRESS_MS = 500;
@@ -118,6 +121,54 @@ export default function Dashboard() {
     updateSettings('misc', { panelRatio: ratio });
   }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /* ── Zones / floors ── */
+  const [zones, setZones] = useState<ZoneConfig[]>([]);
+  const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
+
+  /** Show/hide model meshes according to a zone's mesh-name filter. */
+  const applyZoneVisibility = useCallback((zone: ZoneConfig | null) => {
+    const meshes = modelMeshesRef.current;
+    if (!meshes.length) return;
+    const filter = zone?.meshFilter;
+    for (const mesh of meshes) {
+      if (!filter || filter.prefixes.length === 0) {
+        mesh.setEnabled(true);
+        continue;
+      }
+      const name = mesh.name.toLowerCase();
+      const matches = filter.prefixes.some((p) => name.startsWith(p.toLowerCase()));
+      mesh.setEnabled(filter.mode === 'include' ? matches : !matches);
+    }
+  }, []);
+
+  const handleZoneSelect = useCallback((zoneId: string | null) => {
+    const config = configRef.current;
+    if (!config) return;
+    const zone = config.zones?.find((z) => z.id === zoneId) ?? null;
+    setActiveZoneId(zone?.id ?? null);
+    applyZoneVisibility(zone);
+
+    // Fly to the zone's camera pose when one is defined
+    const camera = sceneCtxRef.current?.camera;
+    if (camera && zone?.cameraPose) {
+      const p = zone.cameraPose;
+      camera.target = new Vector3(p.target.x, p.target.y, p.target.z);
+      camera.alpha = p.alpha;
+      camera.beta = p.beta;
+      camera.radius = p.radius;
+    }
+    if (!simulationMode) updateConfig({ activeZoneId: zone?.id ?? undefined });
+  }, [applyZoneVisibility, simulationMode]);
+
+  /* ── HA config sync (Issue #8): push local edits, pull newer remote ── */
+  useEffect(() => {
+    if (simulationMode || demoMode) return;
+    setConfigChangedHook((cfg) => schedulePush(() => cfg));
+    return () => setConfigChangedHook(null);
+  }, [simulationMode, demoMode]);
+
+  const syncAttemptedRef = useRef(false);
   const [cardStates, setCardStates] = useState<Record<string, HAState>>({});
   const [gridEditMode, setGridEditMode] = useState(false);
   const [cardPanelOpen, setCardPanelOpen] = useState(false);
@@ -701,7 +752,18 @@ export default function Dashboard() {
           return;
         }
       } else {
-        modelBlob = await getModelBlob();
+        const syncSettings = getSetting('sync');
+        if (syncSettings.modelSource === 'ha') {
+          // Model hosted in HA's config/www/3dash — ETag-cached in IndexedDB
+          modelBlob = await fetchModelFromHA(syncSettings.modelName);
+          if (!modelBlob) {
+            // Fall back to the locally uploaded model
+            modelBlob = await getModelBlob();
+            if (modelBlob) showToast('warning', 'Could not reach HA model — using local copy');
+          }
+        } else {
+          modelBlob = await getModelBlob();
+        }
       }
       if (!modelBlob) {
         navigate('/onboarding');
@@ -746,6 +808,17 @@ export default function Dashboard() {
         modelMeshesRef.current = result.meshes.filter(
           (m) => m.getTotalVertices?.() > 0,
         );
+
+        // Restore zones + last active zone (visibility filter) from config
+        {
+          const cfgZones = configRef.current?.zones ?? [];
+          setZones(cfgZones);
+          const savedZone = cfgZones.find((z) => z.id === configRef.current?.activeZoneId) ?? null;
+          if (savedZone) {
+            setActiveZoneId(savedZone.id);
+            applyZoneVisibility(savedZone);
+          }
+        }
 
         // Apply persisted edge width to model meshes (ModelLoader defaults to 3)
         {
@@ -1025,7 +1098,25 @@ export default function Dashboard() {
     }
 
     const callbacks = {
-      onStatusChanged: (status: HAConnectionStatus) => setHaStatus(status),
+      onStatusChanged: (status: HAConnectionStatus) => {
+        setHaStatus(status);
+        // First successful connection → reconcile config with HA user-data store
+        if (status === 'connected' && !simulationMode && !demoMode && !syncAttemptedRef.current) {
+          syncAttemptedRef.current = true;
+          const local = configRef.current;
+          if (local) {
+            syncOnConnect(local).then((res) => {
+              if (res.action === 'pulled' && res.remoteConfig) {
+                replaceConfig(res.remoteConfig);
+                showToast('info', 'Newer config found on Home Assistant — applying…');
+                setTimeout(() => window.location.reload(), 1200);
+              } else if (res.action === 'pushed') {
+                showToast('success', 'Config synced to Home Assistant');
+              }
+            }).catch((e) => console.warn('[haSync] initial sync failed:', e));
+          }
+        }
+      },
       onStateChanged: (entityId: string, state: HAState) => {
         stopPendingFeedback(entityId);
         if (meshMapRef.current[entityId]) applyLightState(entityId, state);
@@ -1594,7 +1685,13 @@ export default function Dashboard() {
         onCardDelete={handleCardDelete}
         onExitSimulation={simulationMode ? () => {
           setSimulationMode(false);
-          navigate('/onboarding');
+          // Configured devices return to their live dashboard; a full reload
+          // clears all in-memory simulation state (HA adapter, model, config).
+          if (hasConfig() && (getConfig().onboarding?.completed ?? false)) {
+            window.location.reload();
+          } else {
+            navigate('/onboarding');
+          }
         } : undefined}
       />
       {cardPanelOpen && (
@@ -1623,6 +1720,13 @@ export default function Dashboard() {
           onScrubberTimeChange={setScrubberTime}
           cloudCoverFactor={cloudCoverFactor}
         />
+
+        <ZoneSwitcher
+          zones={zones}
+          activeZoneId={activeZoneId}
+          onSelect={handleZoneSelect}
+        />
+        <ToastHost />
 
         <DebugPanel
           open={debugOpen}
@@ -1722,6 +1826,24 @@ export default function Dashboard() {
           haStatus={haStatus}
           modelStatus={modelStatus}
           modelStatusColor={modelStatusColor}
+          getCameraPose={() => {
+            const cam = sceneCtxRef.current?.camera;
+            if (!cam) return null;
+            return {
+              alpha: cam.alpha,
+              beta: cam.beta,
+              radius: cam.radius,
+              target: { x: cam.target.x, y: cam.target.y, z: cam.target.z },
+            };
+          }}
+          onZonesChanged={(newZones) => {
+            if (configRef.current) configRef.current = { ...configRef.current, zones: newZones };
+            setZones(newZones);
+            // Drop the active zone if it was removed
+            if (activeZoneId && !newZones.some((z) => z.id === activeZoneId)) {
+              handleZoneSelect(null);
+            }
+          }}
         />
 
         {homeViewSetting && (

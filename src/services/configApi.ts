@@ -1,10 +1,20 @@
 import JSZip from 'jszip';
-import type { AppConfig, DisplayConfig, LightConfig, LightGroup, ShadowWallConfig, SidePanelConfig, TubeConfig } from '../types';
-import { saveModel as dbSaveModel, getModel as dbGetModel, deleteModel as dbDeleteModel } from './storageApi';
+import type { AppConfig, DisplayConfig, LightConfig, LightGroup, ShadowWallConfig, SidePanelConfig, TubeConfig, ZoneConfig } from '../types';
+import { saveModel as dbSaveModel, getModel as dbGetModel, deleteAllModels } from './storageApi';
 import { getSettings, setAllSettings, type AppSettings } from './settingsStore';
 import { isSimulationActive } from '../contexts/SimulationModeContext';
 
 const CONFIG_KEY = 'config';
+
+/**
+ * Hook invoked after every persisted config mutation. Wired to
+ * haSync.schedulePush by the Dashboard (kept as an injection point
+ * to avoid a configApi ↔ haSync import cycle).
+ */
+let configChangedHook: ((config: AppConfig) => void) | null = null;
+export function setConfigChangedHook(fn: ((config: AppConfig) => void) | null): void {
+  configChangedHook = fn;
+}
 
 const DEFAULT_CONFIG: AppConfig = {
   location: { latitude: 43.6077, longitude: 3.8766 },
@@ -34,7 +44,9 @@ export function getConfig(): AppConfig {
   const raw = localStorage.getItem(CONFIG_KEY);
   if (!raw) return { ...DEFAULT_CONFIG };
   try {
-    return JSON.parse(raw) as AppConfig;
+    // Merge over defaults so required fields (lights, location) always exist,
+    // even for configs imported from backups or pulled from HA sync.
+    return { ...DEFAULT_CONFIG, ...(JSON.parse(raw) as Partial<AppConfig>) } as AppConfig;
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -50,6 +62,8 @@ export function updateConfig(data: {
   sidePanel?: SidePanelConfig;
   tubes?: TubeConfig[];
   onboarding?: { completed: boolean };
+  zones?: ZoneConfig[];
+  activeZoneId?: string;
 }): void {
   if (isSimulationActive()) {
     // Update in-memory override so the UI reacts, but never persist
@@ -59,8 +73,14 @@ export function updateConfig(data: {
     return;
   }
   const current = getConfig();
-  const merged = { ...current, ...data };
+  const merged: AppConfig = { ...current, ...data, updatedAt: Date.now() };
   localStorage.setItem(CONFIG_KEY, JSON.stringify(merged));
+  configChangedHook?.(merged);
+}
+
+/** Replace the whole config (used when a newer remote config is pulled from HA). */
+export function replaceConfig(config: AppConfig): void {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
 /** Store a GLB model file in IndexedDB. */
@@ -73,10 +93,10 @@ export async function getModelBlob(): Promise<Blob | null> {
   return dbGetModel();
 }
 
-/** Remove config from localStorage and model from IndexedDB. */
+/** Remove config from localStorage and all models from IndexedDB. */
 export async function resetConfig(): Promise<void> {
   localStorage.removeItem(CONFIG_KEY);
-  await dbDeleteModel();
+  await deleteAllModels();
 }
 
 /** Export config + settings + model as a downloadable ZIP. */

@@ -522,3 +522,10 @@
     height: 28px;
   }
 }
+
+.onboarding-welcome-simulation-hint {
+  font-size: 12px;
+  opacity: 0.55;
+  text-align: center;
+  margin: -4px 0 4px;
+}

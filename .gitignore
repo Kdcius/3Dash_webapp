@@ -6,3 +6,4 @@ dist-server/
 .claude/
 CLAUDE.md
 server/certs/
+.local-model/

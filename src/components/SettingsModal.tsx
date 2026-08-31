@@ -4,12 +4,14 @@ import {
   Server, Palette, Box, MonitorCloud, Hand, Cog, Info,
   Lightbulb, LayoutTemplate, ChevronLeft, X,
   Monitor, Smartphone, Search, RotateCw, Move,
-  Github, HeartHandshake, Scale,
+  Github, HeartHandshake, Scale, Layers, Plus, Trash2, Camera,
 } from 'lucide-react';
 import { buildWsUrl, type HAConnectionStatus } from '../services/haWebSocket';
-import type { HASettings } from '../types';
-import { getConfig, resetConfig, updateConfig, exportBackup, importBackup } from '../services/configApi';
+import type { HASettings, ZoneCameraPose, ZoneConfig } from '../types';
+import { getConfig, resetConfig, updateConfig, exportBackup, importBackup, replaceConfig } from '../services/configApi';
 import { clearSettings, getSetting, getSettings, updateSettings } from '../services/settingsStore';
+import { pushConfigToHA, pullRemoteConfig } from '../services/haSync';
+import { showToast } from './Toast';
 import { useDemoMode } from '../contexts/DemoModeContext';
 import { useCameraControls, type CameraControlsFlags } from '../contexts/CameraControlsContext';
 import {
@@ -20,7 +22,7 @@ import {
 } from '../contexts/ThemeContext';
 import './SettingsModal.css';
 
-type Section = 'main' | 'connection' | 'appearance' | 'render' | 'environment' | 'controls' | 'system' | 'infos';
+type Section = 'main' | 'connection' | 'appearance' | 'render' | 'environment' | 'controls' | 'zones' | 'system' | 'infos';
 
 interface Props {
   open: boolean;
@@ -89,6 +91,12 @@ interface Props {
   haStatus: HAConnectionStatus;
   modelStatus: string;
   modelStatusColor?: string;
+
+  /* Zones */
+  /** Read the current camera pose (used as a zone's saved view). */
+  getCameraPose?: () => ZoneCameraPose | null;
+  /** Called after zones are saved so the dashboard can refresh its switcher. */
+  onZonesChanged?: (zones: ZoneConfig[]) => void;
 }
 
 const SECTIONS: { key: Section; label: string; icon: typeof Server }[] = [
@@ -97,6 +105,7 @@ const SECTIONS: { key: Section; label: string; icon: typeof Server }[] = [
   { key: 'render', label: 'Render', icon: Box },
   { key: 'environment', label: 'Environment', icon: MonitorCloud },
   { key: 'controls', label: 'Controls', icon: Hand },
+  { key: 'zones', label: 'Zones', icon: Layers },
   { key: 'system', label: 'System', icon: Cog },
   { key: 'infos', label: 'Infos', icon: Info },
 ];
@@ -140,6 +149,8 @@ export default function SettingsModal({
   haStatus,
   modelStatus,
   modelStatusColor,
+  getCameraPose,
+  onZonesChanged,
 }: Props) {
   const navigate = useNavigate();
   const { demoMode, setDemoMode } = useDemoMode();
@@ -156,6 +167,14 @@ export default function SettingsModal({
   const [haPort, setHaPort] = useState(haSettings.port);
   const [haToken, setHaToken] = useState(haSettings.token);
   const [haSaveStatus, setHaSaveStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [syncSettings, setSyncSettings] = useState(() => getSetting('sync'));
+  const [syncBusy, setSyncBusy] = useState(false);
+
+  /* Zones draft (saved to config only via the "Save zones" button) */
+  const [zonesDraft, setZonesDraft] = useState<ZoneConfig[]>(() => getConfig().zones ?? []);
+  const updateZone = useCallback((index: number, patch: Partial<ZoneConfig>) => {
+    setZonesDraft((zs) => zs.map((z, i) => (i === index ? { ...z, ...patch } : z)));
+  }, []);
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -466,6 +485,99 @@ export default function SettingsModal({
                         : haSaveStatus === 'success' ? '\u2713 Connected'
                         : haSaveStatus === 'error' ? '\u2717 Failed'
                         : 'Save'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Cross-device sync (config stored in HA's frontend user-data) */}
+                <div className="settings-section">
+                  <div className="settings-section-label">Sync</div>
+                  <div className="settings-mode-toggle">
+                    <button
+                      className={`settings-mode-btn${syncSettings.autoSync ? ' active live' : ''}`}
+                      onClick={() => {
+                        updateSettings('sync', { autoSync: true });
+                        setSyncSettings((s) => ({ ...s, autoSync: true }));
+                      }}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      className={`settings-mode-btn${!syncSettings.autoSync ? ' active demo' : ''}`}
+                      onClick={() => {
+                        updateSettings('sync', { autoSync: false });
+                        setSyncSettings((s) => ({ ...s, autoSync: false }));
+                      }}
+                    >
+                      Off
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      className="settings-action-btn"
+                      disabled={syncBusy}
+                      onClick={async () => {
+                        setSyncBusy(true);
+                        try {
+                          await pushConfigToHA(getConfig());
+                          showToast('success', 'Config pushed to Home Assistant');
+                        } catch (e) {
+                          showToast('error', `Push failed: ${e instanceof Error ? e.message : e}`);
+                        } finally {
+                          setSyncBusy(false);
+                        }
+                      }}
+                    >
+                      Push now
+                    </button>
+                    <button
+                      className="settings-action-btn"
+                      disabled={syncBusy}
+                      onClick={async () => {
+                        setSyncBusy(true);
+                        try {
+                          const remote = await pullRemoteConfig();
+                          if (!remote) {
+                            showToast('info', 'No config stored on Home Assistant yet');
+                          } else {
+                            replaceConfig(remote.config);
+                            showToast('success', 'Config pulled \u2014 reloading\u2026');
+                            setTimeout(() => window.location.reload(), 800);
+                          }
+                        } catch (e) {
+                          showToast('error', `Pull failed: ${e instanceof Error ? e.message : e}`);
+                        } finally {
+                          setSyncBusy(false);
+                        }
+                      }}
+                    >
+                      Pull now
+                    </button>
+                  </div>
+                </div>
+
+                {/* Model source: this device's storage vs. HA config/www/3dash */}
+                <div className="settings-section">
+                  <div className="settings-section-label">Model Source</div>
+                  <div className="settings-mode-toggle">
+                    <button
+                      className={`settings-mode-btn${syncSettings.modelSource === 'device' ? ' active live' : ''}`}
+                      onClick={() => {
+                        updateSettings('sync', { modelSource: 'device' });
+                        setSyncSettings((s) => ({ ...s, modelSource: 'device' }));
+                      }}
+                    >
+                      This device
+                    </button>
+                    <button
+                      className={`settings-mode-btn${syncSettings.modelSource === 'ha' ? ' active live' : ''}`}
+                      onClick={() => {
+                        updateSettings('sync', { modelSource: 'ha' });
+                        setSyncSettings((s) => ({ ...s, modelSource: 'ha' }));
+                        showToast('info', 'Place your model at config/www/3dash/model.glb on HA');
+                      }}
+                    >
+                      Home Assistant
                     </button>
                   </div>
                 </div>
@@ -980,6 +1092,120 @@ export default function SettingsModal({
                 <div className="settings-infos-footer">
                   <HeartHandshake size={16} strokeWidth={1.5} />
                   <span>Built with love in Montpellier</span>
+                </div>
+              </div>
+            )}
+
+            {/* Zones / floors */}
+            {(section === 'zones' || (animating && prevSection === 'zones')) && (
+              <div className="settings-page">
+                <div className="settings-section">
+                  <div className="settings-section-label">Floors & Areas</div>
+                  <div className="settings-zones-hint">
+                    Zones show or hide parts of the model by mesh-name prefix
+                    (e.g. all ground-floor meshes named "GF_…"). Switch zones
+                    with the floating button on the dashboard.
+                  </div>
+                  {zonesDraft.map((z, i) => (
+                    <div key={z.id} className="settings-zone-row">
+                      <div className="settings-ha-row">
+                        <div className="settings-ha-field" style={{ flex: 2 }}>
+                          <label className="settings-ha-label">Name</label>
+                          <input
+                            className="settings-ha-input"
+                            type="text"
+                            placeholder="Ground Floor"
+                            value={z.name}
+                            onChange={(e) => updateZone(i, { name: e.target.value })}
+                          />
+                        </div>
+                        <div className="settings-ha-field" style={{ flex: 1 }}>
+                          <label className="settings-ha-label">Icon</label>
+                          <input
+                            className="settings-ha-input"
+                            type="text"
+                            placeholder="Home"
+                            value={z.icon ?? ''}
+                            onChange={(e) => updateZone(i, { icon: e.target.value || undefined })}
+                          />
+                        </div>
+                      </div>
+                      <div className="settings-ha-row">
+                        <div className="settings-ha-field" style={{ flex: 2 }}>
+                          <label className="settings-ha-label">Mesh prefixes (comma-separated)</label>
+                          <input
+                            className="settings-ha-input"
+                            type="text"
+                            placeholder="GF_, Stairs"
+                            value={z.meshFilter?.prefixes.join(', ') ?? ''}
+                            onChange={(e) => {
+                              const prefixes = e.target.value.split(',').map((p) => p.trim()).filter(Boolean);
+                              updateZone(i, {
+                                meshFilter: prefixes.length
+                                  ? { mode: z.meshFilter?.mode ?? 'include', prefixes }
+                                  : undefined,
+                              });
+                            }}
+                          />
+                        </div>
+                        <div className="settings-ha-field" style={{ flex: 1 }}>
+                          <label className="settings-ha-label">Filter</label>
+                          <button
+                            className="settings-action-btn"
+                            onClick={() => updateZone(i, {
+                              meshFilter: z.meshFilter
+                                ? { ...z.meshFilter, mode: z.meshFilter.mode === 'include' ? 'exclude' : 'include' }
+                                : undefined,
+                            })}
+                          >
+                            {z.meshFilter?.mode === 'exclude' ? 'Hide listed' : 'Show listed'}
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="settings-action-btn"
+                          title="Save the current camera position as this zone's view"
+                          onClick={() => {
+                            const pose = getCameraPose?.() ?? null;
+                            updateZone(i, { cameraPose: pose });
+                            if (pose) showToast('success', `Camera view saved for ${z.name || 'zone'}`);
+                          }}
+                        >
+                          <Camera size={14} /> {z.cameraPose ? 'Update view' : 'Set view'}
+                        </button>
+                        <button
+                          className="settings-action-btn"
+                          onClick={() => setZonesDraft((zs) => zs.filter((_, j) => j !== i))}
+                        >
+                          <Trash2 size={14} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      className="settings-action-btn"
+                      onClick={() => setZonesDraft((zs) => [...zs, {
+                        id: `zone-${Date.now().toString(36)}`,
+                        name: '',
+                        meshFilter: { mode: 'include', prefixes: [] },
+                      }])}
+                    >
+                      <Plus size={14} /> Add zone
+                    </button>
+                    <button
+                      className="settings-action-btn"
+                      onClick={() => {
+                        const cleaned = zonesDraft.filter((z) => z.name.trim());
+                        updateConfig({ zones: cleaned });
+                        onZonesChanged?.(cleaned);
+                        showToast('success', 'Zones saved');
+                      }}
+                    >
+                      Save zones
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

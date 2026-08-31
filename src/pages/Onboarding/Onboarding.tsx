@@ -12,6 +12,7 @@ import HASetupStep, { testHA } from './steps/HASetupStep';
 import ModelUploadStep from './steps/ModelUploadStep';
 import LocationStep from './steps/LocationStep';
 import CompletionStep from './steps/CompletionStep';
+import ToastHost from '../../components/Toast';
 import './Onboarding.css';
 
 // Steps: Welcome(0) ImportReport(1) HA(2) Model(3) Location(4) Done(5)
@@ -207,6 +208,7 @@ export default function Onboarding() {
 
   return (
     <div className="onboarding">
+      <ToastHost />
       <button
         className="onboarding-theme-toggle"
         onClick={() => setTheme(resolved === 'dark' ? 'light' : 'dark')}
